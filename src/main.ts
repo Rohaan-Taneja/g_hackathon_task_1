@@ -1,5 +1,11 @@
 import "./style.css";
-import html2canvas from "html2canvas";
+import heic2any from "heic2any";
+import {
+  initShareButtons,
+  renderPassBlob,
+  getPassFilename,
+  triggerBlobDownload,
+} from "./share.ts";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
@@ -76,7 +82,7 @@ app.innerHTML = `
           <input
             type="file"
             id="fileInput"
-            accept="image/png,image/jpeg,image/webp,image/heic,.heic"
+            accept="image/png,image/jpeg,image/webp,image/heic,image/heif,.heic,.heif"
             hidden
           />
 
@@ -86,15 +92,15 @@ app.innerHTML = `
             id="uploadContent"
           >
 
-            <div class="upload-icon">
+            <div class="upload-icon" id="uploadIcon">
               ↑
             </div>
 
-            <h3>
+            <h3 id="uploadTitle">
               DROP YOUR PHOTO
             </h3>
 
-            <p>
+            <p id="uploadSubtitle">
               JPG · PNG · WEBP · HEIC
             </p>
 
@@ -422,19 +428,47 @@ app.innerHTML = `
           <button
             id="downloadBtn"
             class="primary-btn"
+            disabled
           >
             ↓ DOWNLOAD PASS
           </button>
 
+        </div>
+
+
+        <!-- SHARE (X / LinkedIn / Instagram, one-click) -->
+
+        <div class="share-row">
 
           <button
-            id="shareBtn"
-            class="secondary-btn"
+            id="shareX"
+            class="platform-btn x"
+            disabled
           >
-            ↗ SHARE
+            𝕏 SHARE
+          </button>
+
+          <button
+            id="shareLinkedIn"
+            class="platform-btn linkedin"
+            disabled
+          >
+            in SHARE
+          </button>
+
+          <button
+            id="shareInstagram"
+            class="platform-btn instagram"
+            disabled
+          >
+            IG SHARE
           </button>
 
         </div>
+
+        <p class="share-hint" id="shareHint">
+          Upload your photo to unlock download &amp; share.
+        </p>
 
       </div>
 
@@ -457,7 +491,7 @@ app.innerHTML = `
       <div>GOA</div>
       <span>✦</span>
 
-      <div>#FRAMEDINGOA</div>
+      <div>#FramedINGoa</div>
 
     </section>
 
@@ -510,251 +544,172 @@ app.innerHTML = `
 // ELEMENTS
 // ======================================================
 
-const fileInput =
-  document.querySelector<HTMLInputElement>(
-    "#fileInput"
-  )!;
+const fileInput = document.querySelector<HTMLInputElement>("#fileInput")!;
+const uploadBtn = document.querySelector<HTMLButtonElement>("#uploadBtn")!;
+const dropZone = document.querySelector<HTMLDivElement>("#dropZone")!;
+const uploadContent = document.querySelector<HTMLDivElement>("#uploadContent")!;
+const uploadTitle = document.querySelector<HTMLHeadingElement>("#uploadTitle")!;
+const uploadSubtitle = document.querySelector<HTMLParagraphElement>("#uploadSubtitle")!;
+const previewImage = document.querySelector<HTMLImageElement>("#previewImage")!;
+const passPhoto = document.querySelector<HTMLImageElement>("#passPhoto")!;
+const photoPlaceholder = document.querySelector<HTMLDivElement>("#photoPlaceholder")!;
+const changePhoto = document.querySelector<HTMLButtonElement>("#changePhoto")!;
+const nameInput = document.querySelector<HTMLInputElement>("#nameInput")!;
+const passengerName = document.querySelector<HTMLSpanElement>("#passengerName")!;
+const passName = document.querySelector<HTMLDivElement>("#passName")!;
+const downloadBtn = document.querySelector<HTMLButtonElement>("#downloadBtn")!;
+const shareXBtn = document.querySelector<HTMLButtonElement>("#shareX")!;
+const shareLinkedInBtn = document.querySelector<HTMLButtonElement>("#shareLinkedIn")!;
+const shareInstagramBtn = document.querySelector<HTMLButtonElement>("#shareInstagram")!;
+const shareHint = document.querySelector<HTMLParagraphElement>("#shareHint")!;
 
-const uploadBtn =
-  document.querySelector<HTMLButtonElement>(
-    "#uploadBtn"
-  )!;
+let hasPhoto = false;
 
-const dropZone =
-  document.querySelector<HTMLDivElement>(
-    "#dropZone"
-  )!;
+// ======================================================
+// PHOTO-REQUIRED GUARDRAIL
+// (several teams got disqualified for "No selfie" — this
+// makes it impossible to download/share an empty pass)
+// ======================================================
 
-const uploadContent =
-  document.querySelector<HTMLDivElement>(
-    "#uploadContent"
-  )!;
+function setPhotoState(uploaded: boolean) {
+  hasPhoto = uploaded;
+  downloadBtn.disabled = !uploaded;
+  shareXBtn.disabled = !uploaded;
+  shareLinkedInBtn.disabled = !uploaded;
+  shareInstagramBtn.disabled = !uploaded;
+  shareHint.textContent = uploaded
+    ? "Ready to share — tap a platform below."
+    : "Upload your photo to unlock download & share.";
+}
 
-const previewImage =
-  document.querySelector<HTMLImageElement>(
-    "#previewImage"
-  )!;
-
-const passPhoto =
-  document.querySelector<HTMLImageElement>(
-    "#passPhoto"
-  )!;
-
-const photoPlaceholder =
-  document.querySelector<HTMLDivElement>(
-    "#photoPlaceholder"
-  )!;
-
-const changePhoto =
-  document.querySelector<HTMLButtonElement>(
-    "#changePhoto"
-  )!;
-
-const nameInput =
-  document.querySelector<HTMLInputElement>(
-    "#nameInput"
-  )!;
-
-const passengerName =
-  document.querySelector<HTMLSpanElement>(
-    "#passengerName"
-  )!;
-
-const passName =
-  document.querySelector<HTMLDivElement>(
-    "#passName"
-  )!;
-
-const downloadBtn =
-  document.querySelector<HTMLButtonElement>(
-    "#downloadBtn"
-  )!;
-
-const shareBtn =
-  document.querySelector<HTMLButtonElement>(
-    "#shareBtn"
-  )!;
+setPhotoState(false);
 
 
 // ======================================================
 // OPEN FILE PICKER
 // ======================================================
 
-uploadBtn.addEventListener(
-  "click",
-  (event) => {
-
-    event.stopPropagation();
-
-    fileInput.click();
-
-  }
-);
+uploadBtn.addEventListener("click", (event) => {
+  event.stopPropagation();
+  fileInput.click();
+});
 
 
 // ======================================================
 // DROP ZONE CLICK
 // ======================================================
 
-dropZone.addEventListener(
-  "click",
-  () => {
-
-    if (
-      previewImage.classList.contains(
-        "hidden"
-      )
-    ) {
-
-      fileInput.click();
-
-    }
-
+dropZone.addEventListener("click", () => {
+  if (previewImage.classList.contains("hidden")) {
+    fileInput.click();
   }
-);
+});
 
 
 // ======================================================
 // FILE INPUT
 // ======================================================
 
-fileInput.addEventListener(
-  "change",
-  () => {
+fileInput.addEventListener("change", () => {
+  const file = fileInput.files?.[0];
+  if (!file) return;
+  void handleImage(file);
+});
 
-    const file =
-      fileInput.files?.[0];
 
-    if (!file) return;
+// ======================================================
+// DRAG OVER / LEAVE / DROP
+// ======================================================
 
-    handleImage(file);
+dropZone.addEventListener("dragover", (event) => {
+  event.preventDefault();
+  dropZone.classList.add("dragging");
+});
 
+dropZone.addEventListener("dragleave", () => {
+  dropZone.classList.remove("dragging");
+});
+
+dropZone.addEventListener("drop", (event) => {
+  event.preventDefault();
+  dropZone.classList.remove("dragging");
+  const file = event.dataTransfer?.files[0];
+  if (!file) return;
+  void handleImage(file);
+});
+
+
+// ======================================================
+// IMAGE HANDLING (with real HEIC support)
+// ======================================================
+
+function isHeicFile(file: File): boolean {
+  const type = file.type.toLowerCase();
+  const name = file.name.toLowerCase();
+  return (
+    type === "image/heic" ||
+    type === "image/heif" ||
+    name.endsWith(".heic") ||
+    name.endsWith(".heif")
+  );
+}
+
+function setProcessingState(isProcessing: boolean) {
+  uploadBtn.disabled = isProcessing;
+  if (isProcessing) {
+    uploadTitle.textContent = "PROCESSING...";
+    uploadSubtitle.textContent = "Converting your photo";
+  } else {
+    uploadTitle.textContent = "DROP YOUR PHOTO";
+    uploadSubtitle.textContent = "JPG · PNG · WEBP · HEIC";
   }
-);
+}
 
+async function handleImage(file: File) {
+  const isImage = file.type.startsWith("image/");
+  const heic = isHeicFile(file);
 
-// ======================================================
-// DRAG OVER
-// ======================================================
-
-dropZone.addEventListener(
-  "dragover",
-  (event) => {
-
-    event.preventDefault();
-
-    dropZone.classList.add(
-      "dragging"
-    );
-
-  }
-);
-
-
-// ======================================================
-// DRAG LEAVE
-// ======================================================
-
-dropZone.addEventListener(
-  "dragleave",
-  () => {
-
-    dropZone.classList.remove(
-      "dragging"
-    );
-
-  }
-);
-
-
-// ======================================================
-// DROP
-// ======================================================
-
-dropZone.addEventListener(
-  "drop",
-  (event) => {
-
-    event.preventDefault();
-
-    dropZone.classList.remove(
-      "dragging"
-    );
-
-    const file =
-      event.dataTransfer?.files[0];
-
-    if (!file) return;
-
-    handleImage(file);
-
-  }
-);
-
-
-// ======================================================
-// IMAGE HANDLING
-// ======================================================
-
-function handleImage(file: File) {
-
-  const isImage =
-    file.type.startsWith("image/");
-
-  const isHeic =
-    file.name
-      .toLowerCase()
-      .endsWith(".heic");
-
-
-  if (!isImage && !isHeic) {
-
-    alert(
-      "Please upload a JPG, PNG, WEBP or HEIC image."
-    );
-
+  if (!isImage && !heic) {
+    alert("Please upload a JPG, PNG, WEBP or HEIC image.");
     return;
-
   }
 
+  let displaySource: Blob = file;
 
-  const url =
-    URL.createObjectURL(file);
+  // HEIC/HEIF can't be rendered directly by <img> in Chrome, Firefox,
+  // or most Android browsers — convert to JPEG first.
+  if (heic) {
+    setProcessingState(true);
+    try {
+      const converted = await heic2any({
+        blob: file,
+        toType: "image/jpeg",
+        quality: 0.9,
+      });
+      displaySource = Array.isArray(converted) ? converted[0] : converted;
+    } catch (error) {
+      console.error(error);
+      setProcessingState(false);
+      alert("Couldn't process this HEIC photo. Please try a JPG or PNG instead.");
+      return;
+    }
+    setProcessingState(false);
+  }
 
+  const url = URL.createObjectURL(displaySource);
 
-  // Preview
   previewImage.src = url;
-
-
-  // Boarding pass image
   passPhoto.src = url;
 
+  previewImage.classList.remove("hidden");
+  passPhoto.classList.remove("hidden");
 
-  // Show images
-  previewImage.classList.remove(
-    "hidden"
-  );
+  uploadContent.classList.add("hidden");
+  photoPlaceholder.classList.add("hidden");
 
-  passPhoto.classList.remove(
-    "hidden"
-  );
+  changePhoto.classList.remove("hidden");
 
-
-  // Hide placeholder
-  uploadContent.classList.add(
-    "hidden"
-  );
-
-  photoPlaceholder.classList.add(
-    "hidden"
-  );
-
-
-  // Show change button
-  changePhoto.classList.remove(
-    "hidden"
-  );
-
+  setPhotoState(true);
 }
 
 
@@ -762,204 +717,69 @@ function handleImage(file: File) {
 // CHANGE PHOTO
 // ======================================================
 
-changePhoto.addEventListener(
-  "click",
-  (event) => {
-
-    event.stopPropagation();
-
-    fileInput.value = "";
-
-    fileInput.click();
-
-  }
-);
+changePhoto.addEventListener("click", (event) => {
+  event.stopPropagation();
+  fileInput.value = "";
+  fileInput.click();
+});
 
 
 // ======================================================
 // NAME INPUT
 // ======================================================
 
-nameInput.addEventListener(
-  "input",
-  () => {
-
-    const name =
-      nameInput.value
-        .trim()
-        .toUpperCase() ||
-      "BUILDER";
-
-
-    passengerName.textContent =
-      name;
-
-    passName.textContent =
-      name;
-
-  }
-);
+nameInput.addEventListener("input", () => {
+  const name = nameInput.value.trim().toUpperCase() || "BUILDER";
+  passengerName.textContent = name;
+  passName.textContent = name;
+});
 
 
 // ======================================================
 // DOWNLOAD BOARDING PASS
+// (rendering + filename logic lives in share.ts so the
+// download button and the share buttons stay in sync)
 // ======================================================
 
-downloadBtn.addEventListener(
-  "click",
-  async () => {
+const boardingPassEl = document.querySelector<HTMLElement>("#boardingPass")!;
 
-    const boardingPass =
-      document.querySelector<HTMLElement>(
-        "#boardingPass"
-      );
-
-
-    if (!boardingPass) return;
-
-
-    const originalText =
-      downloadBtn.textContent;
-
-
-    downloadBtn.textContent =
-      "GENERATING...";
-
-
-    downloadBtn.disabled =
-      true;
-
-
-    try {
-
-      const canvas =
-        await html2canvas(
-          boardingPass,
-          {
-            scale: 3,
-
-            backgroundColor:
-              "#eee8da",
-
-            useCORS: true,
-
-            logging: false
-          }
-        );
-
-
-      const link =
-        document.createElement("a");
-
-
-      const name =
-        nameInput.value
-          .trim()
-          .replace(/\s+/g, "-")
-          .toLowerCase() ||
-        "builder";
-
-
-      link.download =
-        `hh-goa-${name}.png`;
-
-
-      link.href =
-        canvas.toDataURL(
-          "image/png"
-        );
-
-
-      link.click();
-
-    } catch (error) {
-
-      console.error(error);
-
-      alert(
-        "Could not generate the boarding pass."
-      );
-
-    } finally {
-
-      downloadBtn.textContent =
-        originalText;
-
-      downloadBtn.disabled =
-        false;
-
-    }
-
+downloadBtn.addEventListener("click", async () => {
+  if (!hasPhoto) {
+    alert("Upload your photo first!");
+    return;
   }
-);
 
+  const originalText = downloadBtn.textContent;
+  downloadBtn.textContent = "GENERATING...";
+  downloadBtn.disabled = true;
 
-// ======================================================
-// SHARE
-// ======================================================
-
-shareBtn.addEventListener(
-  "click",
-  async () => {
-
-    const name =
-      nameInput.value
-        .trim() ||
-      "Builder";
-
-
-    const text =
-`✈️ I'm boarding Hacker House Goa 2026!
-
-I'm ${name} and I'm ready to BUILD → SHIP → LAUNCH.
-
-See you in Goa.
-
-#FramedInGoa`;
-
-
-    // Native mobile/browser share
-    if (
-      navigator.share
-    ) {
-
-      try {
-
-        await navigator.share({
-
-          title:
-            "Hacker House Goa 2026",
-
-          text
-
-        });
-
-      } catch {
-
-        // User cancelled.
-      }
-
-      return;
-
-    }
-
-
-    // Desktop fallback
-    try {
-
-      await navigator.clipboard.writeText(
-        text
-      );
-
-      alert(
-        "Share text copied! Paste it on X, LinkedIn or Instagram."
-      );
-
-    } catch {
-
-      alert(text);
-
-    }
-
+  try {
+    const blob = await renderPassBlob(boardingPassEl);
+    triggerBlobDownload(blob, getPassFilename(nameInput.value));
+  } catch (error) {
+    console.error(error);
+    alert("Could not generate the boarding pass.");
+  } finally {
+    downloadBtn.textContent = originalText;
+    downloadBtn.disabled = !hasPhoto;
   }
-);
+});
+
+
+// ======================================================
+// SHARE — ONE-CLICK TO X / LINKEDIN / INSTAGRAM
+// All the share behavior (promo text, hashtag, rendering
+// the just-generated pass, opening the right platform) is
+// in ./share.ts — this just wires it up to the DOM.
+// ======================================================
+
+initShareButtons({
+  passElement: boardingPassEl,
+  buttons: {
+    x: shareXBtn,
+    linkedin: shareLinkedInBtn,
+    instagram: shareInstagramBtn,
+  },
+  getPassengerName: () => nameInput.value,
+  isPhotoUploaded: () => hasPhoto,
+});

@@ -604,6 +604,20 @@ main {
 }
 
 
+.upload-btn:disabled {
+
+  opacity:
+    0.6;
+
+  cursor:
+    wait;
+
+  transform:
+    none;
+
+}
+
+
 .preview-image {
 
   width:
@@ -2033,6 +2047,127 @@ main {
 
 
 /* =========================================================
+   SHARE ROW (X / LinkedIn / Instagram — one-click share)
+   ========================================================= */
+
+.share-row {
+
+  display:
+    flex;
+
+  gap:
+    10px;
+
+  margin-top:
+    10px;
+
+}
+
+
+.platform-btn {
+
+  flex:
+    1;
+
+  border:
+    none;
+
+  padding:
+    14px 10px;
+
+  font-family:
+    "DM Mono";
+
+  font-size:
+    10px;
+
+  font-weight:
+    600;
+
+  letter-spacing:
+    1px;
+
+  color:
+    white;
+
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
+
+}
+
+
+.platform-btn:hover:not(:disabled) {
+
+  transform:
+    translateY(-3px);
+
+  box-shadow:
+    0 10px 20px
+    rgba(0,0,0,0.25);
+
+}
+
+
+.platform-btn:disabled {
+
+  opacity:
+    0.4;
+
+  cursor:
+    not-allowed;
+
+}
+
+
+.platform-btn.x {
+  background: #000000;
+}
+
+
+.platform-btn.linkedin {
+  background: #0a66c2;
+}
+
+
+.platform-btn.instagram {
+
+  background:
+    linear-gradient(
+      45deg,
+      #f58529,
+      #dd2a7b 45%,
+      #8134af 70%,
+      #515bd4
+    );
+
+}
+
+
+.share-hint {
+
+  margin:
+    10px 0 0;
+
+  color:
+    var(--muted);
+
+  font-family:
+    "DM Mono";
+
+  font-size:
+    8px;
+
+  letter-spacing:
+    0.5px;
+
+  text-align:
+    center;
+
+}
+
+
+/* =========================================================
    TICKER
    ========================================================= */
 
@@ -2404,6 +2539,22 @@ footer {
 
     left:
       43%;
+
+  }
+
+
+  .share-row {
+
+    flex-wrap:
+      wrap;
+
+  }
+
+
+  .platform-btn {
+
+    min-width:
+      calc(50% - 5px);
 
   }
 
